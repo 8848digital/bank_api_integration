@@ -12,6 +12,7 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.permissions import add_permission, update_permission_property
 from frappe.core.doctype.version.version import get_diff
 from frappe.utils import getdate, now_datetime, get_link_to_form, get_datetime
+from datetime import datetime
 
 class BankAPIIntegration(Document):
 	pass
@@ -47,6 +48,24 @@ def initiate_transaction_with_otp(docname, otp):
 				'is_default': 1
 				},'bank_account_no')
 	}
+	if frappe.utils.get_url() == "https://desk.lnder.in" and doc.against_customer:
+		if doc.recharge_type == "IOCL Recharge":
+			account = frappe.db.sql("""select va.account_no,b.ifsc_code from `tabBank Account` as b join `tabVirtual Account Details` as va on va.parent=b.name where va.customer = '{0}' and va.type = '{1}' and b.party='{2}' and b.is_default=1 """.format(doc.against_customer,"IOCL Recharge","IOCL"),as_dict=True)
+		if doc.recharge_type == "BPCL Recharge":
+			account = frappe.db.sql("""select va.account_no,b.ifsc_code from `tabBank Account` as b join `tabVirtual Account Details` as va on va.parent=b.name where va.customer = '{0}' and va.type = '{1}' and b.party='{2}' and b.is_default=1""".format(doc.against_customer,"BPCL Recharge","BPCL"),as_dict=True)
+		if account:
+			filters = {
+				"REMARKS": doc.remarks,
+				"UNIQUEID": doc.name,
+				"IFSC": account[0]['ifsc_code'],
+				"AMOUNT": str(doc.amount),
+				"CURRENCY": currency,
+				"TXNTYPE": doc.transaction_type,
+				"PAYEENAME": doc.party,
+				"DEBITACC": frappe.db.get_value('Bank Account', {'name': doc.company_bank_account},'bank_account_no'),
+				"CREDITACC": account[0]['account_no']
+			}
+
 	try:
 		res = prov.initiate_transaction_with_otp(filters)
 		if res['status'] == 'SUCCESS' and 'utr_number' in res:
@@ -67,13 +86,14 @@ def initiate_transaction_with_otp(docname, otp):
 	log_name = log_request(doc.name, 'Initiate Transaction with OTP', filters, config, res)
 	if not workflow_state:
 		status = res['status']
-		frappe.throw(_(f'{status}'))
+#		frappe.throw(_(f'{status}'))
 	if workflow_state:
 		frappe.db.set_value('Outward Bank Payment', {'name': doc.name}, 'workflow_state', workflow_state)
 		frappe.db.commit()
 	if workflow_state in ['Initiation Error', 'Initiation Failed']:
 		if not doc.bobp:
-			frappe.throw(_(f'An error occurred while making request. Kindly check request log for more info {get_link_to_form("Bank API Request Log", log_name)}'))
+			return
+#			frappe.throw(_(f'An error occurred while making request. Kindly check request log for more info {get_link_to_form("Bank API Request Log", log_name)}'))
 
 def initiate_transaction_without_otp(docname):
 	doc = frappe.get_doc('Outward Bank Payment', docname)
@@ -85,7 +105,7 @@ def initiate_transaction_without_otp(docname):
 	filters = {
 		"REMARKS": doc.remarks,
 		"UNIQUEID": doc.name,
-		"IFSC": frappe.db.get_value('Bank Account', 
+		"IFSC": frappe.db.get_value('Bank Account',
 				{'party_type': doc.party_type,
 				'party': doc.party,
 				'is_default': 1
@@ -95,15 +115,35 @@ def initiate_transaction_without_otp(docname):
 		"TXNTYPE": doc.transaction_type,
 		"PAYEENAME": doc.party,
 		"DEBITACC": frappe.db.get_value('Bank Account', 
-					{
-					'name': doc.company_bank_account
-					},'bank_account_no'),
+				{
+				'name': doc.company_bank_account
+				},'bank_account_no'),
 		"CREDITACC": frappe.db.get_value('Bank Account', 
 				{'party_type': doc.party_type,
 				'party': doc.party,
 				'is_default': 1
 				},'bank_account_no')
 	}
+	if frappe.utils.get_url() == "https://desk.lnder.in" and doc.against_customer:
+		if doc.recharge_type == "IOCL Recharge":
+			account = frappe.db.sql("""select va.account_no,b.ifsc_code from `tabBank Account` as b join `tabVirtual Account Details` as va on va.parent=b.name where va.customer = '{0}' and va.type = '{1}' and b.party='{2}' and b.is_default=1 """.format(doc.against_customer,"IOCL Recharge","IOCL"),as_dict=True)
+		if doc.recharge_type == "BPCL Recharge":
+			account = frappe.db.sql("""select va.account_no,b.ifsc_code from `tabBank Account` as b join `tabVirtual Account Details` as va on va.parent=b.name where va.customer = '{0}' and va.type = '{1}' and b.party='{2}' and b.is_default=1""".format(doc.against_customer,"BPCL Recharge","BPCL"),as_dict=True)
+		if account:
+			filters = {
+				"REMARKS": doc.remarks,
+				"UNIQUEID": doc.name,
+				"IFSC": account[0]['ifsc_code'],
+				"AMOUNT": str(doc.amount),
+				"CURRENCY": currency,
+				"TXNTYPE": doc.transaction_type,
+				"PAYEENAME": doc.party,
+				"DEBITACC": frappe.db.get_value('Bank Account', 
+						{
+						'name': doc.company_bank_account
+						},'bank_account_no'),
+				"CREDITACC": account[0]['account_no']
+			}
 	try:
 		res = prov.initiate_transaction_without_otp(filters)
 		if res['status'] == 'SUCCESS' and 'utr_number' in res:
@@ -166,6 +206,7 @@ def send_otp(doctype, docname):
 	}
 	try:
 		res = prov.send_otp(filters)
+		frappe.errprint(res)
 		if res['status'] == 'SUCCESS':
 			is_otp_sent = True
 	except:
@@ -188,7 +229,7 @@ def update_transaction_status(obp_name=None,bobp_name=None):
 	if bobp_name:
 		obp_list = frappe.db.get_all('Outward Bank Payment', {'workflow_state': ['in', ['Initiated','Initiation Pending','Transaction Pending']], 'bobp': ['=', bobp_name]})
 	if bulk_update:
-		obp_list = frappe.db.get_all('Outward Bank Payment', {'workflow_state': ['in', ['Initiated','Initiation Pending','Transaction Pending']]})
+		obp_list = frappe.db.get_all('Outward Bank Payment', {'workflow_state': ['in', ['Initiated','Initiation Pending','Transaction Pending','Initiation Error']],'docstatus' : ['in',['0' , '1']]})
 
 	failed_obp_list = []
 	if not obp_list:
@@ -198,34 +239,41 @@ def update_transaction_status(obp_name=None,bobp_name=None):
 		workflow_state = None
 		obp_doc = frappe.get_doc('Outward Bank Payment', doc['name'])
 		prov, config = get_api_provider_class(obp_doc.company_bank_account)
-		unique_id = frappe.db.get_value('Bank API Integration', 
+		unique_id = frappe.db.get_value('Bank API Integration',
 			{'bank_account': obp_doc.company_bank_account}, 'unique_id')
 		filters = {"UNIQUEID": obp_doc.name if not unique_id else unique_id}
 		try:
 			res = prov.get_transaction_status(filters)
+			if res['status'] == 'SUCCESS' and 'utr_number' in res and obp_doc.workflow_state == "Initiation Error":
+				obp_doc.utr_number = res["utr_number"]
 			if res['status'] == 'SUCCESS' and 'utr_number' in res:
 				workflow_state = 'Transaction Completed'
 			elif res['status'] in ['FAILURE', 'DUPLICATE']:
 				workflow_state = 'Transaction Failed'
 			elif 'PENDING' in res['status']:
 				workflow_state = 'Transaction Pending'
+#			elif 'PENDING' in res['status'] and res['utr_number']:
+#				frappe.db.set_value('Outward Bank Payment',{'name':obp_doc.name},'utr_number',res['utr_number'])
+#				frappe.db.set_value(obp_doc.doctype,{'name':obp_doc.name},'is_verified',1)
+#				workflow_state = 'Transaction Completed'
 			else:
 				workflow_state = 'Transaction Error'
 		except:
 			workflow_state = 'Transaction Error'
 			res = frappe.get_traceback()
-		
+
 		log_name = log_request(obp_doc.name,'Update Transaction Status', filters, config, res)
 		obp_doc.workflow_state = workflow_state
 		obp_doc.save()
 		if workflow_state in ['Transaction Pending', 'Transaction Error', 'Transaction Failed'] and not bulk_update:
 			if not obp_doc.bobp:
-				frappe.throw(_(f'An error occurred while making request. Kindly check request log for more info {get_link_to_form("Bank API Request Log", log_name)}'))
+				continue
+#				frappe.throw(_(f'An error occurred while making request. Kindly check request log for more info {get_link_to_form("Bank API Request Log", log_name)}'))
 			else:
 				failed_obp_list.append(get_link_to_form("Outward Bank Payment", doc['name']))
 	if failed_obp_list and not bulk_update:
 		failed_obp = ','.join(failed_obp_list)
-		frappe.throw(_(f"Transaction status update failed for the below obp(s) {failed_obp}"))
+#		frappe.throw(_(f"Transaction status update failed for the below obp(s) {failed_obp}"))
 	if bobp_name and not bulk_update:
 		frappe.msgprint(_("Transaction Status Updated"))
 
@@ -304,7 +352,7 @@ def fetch_balance(bank_account = None):
 @frappe.whitelist()
 def fetch_account_statement(bank_account = None):
 	account_list = []
-	
+
 	if not bank_account:
 		for acc in frappe.db.get_list('Bank Account', {'is_company_account': 1}):
 			account_list.append(acc['name'])
@@ -339,9 +387,11 @@ def fetch_account_statement(bank_account = None):
 					if transaction['TYPE'] == 'CR':
 						credit = transaction['AMOUNT']
 
+					t_date = datetime.strptime(transaction['TXNDATE'], '%d-%m-%Y %H:%M:%S')
+
 					transaction_list.append({
 						'txn_id': transaction['TRANSACTIONID'],
-						'txn_date':transaction['TXNDATE'],
+						'txn_date':t_date.strftime('%Y-%m-%d'),
 						'debit': debit,
 						'credit': credit,
 						'remarks':transaction['REMARKS']
@@ -546,7 +596,7 @@ def get_transaction_type(bank_account):
 		'ICICI': ['Internal Payments', 'External Payments', 'Virtual A/c Payments']
 	}
 	bank_api_provider = frappe.get_value('Bank API Integration', {'bank_account': bank_account}, 'bank_api_provider')
-	
+
 	if not bank_api_provider in mappings:
 		return common_transaction_types
 	return common_transaction_types + mappings[bank_api_provider]
@@ -555,6 +605,8 @@ def get_transaction_type(bank_account):
 def get_field_status(bank_account):
 	config = frappe.get_site_config()
 	data = {}
+#	data['is_otp_enabled'] = 0
+#	data['is_pwd_security_enabled'] = 0
 	if 'bank_api_integration' in config:
 		enable_otp_based_transaction = config.bank_api_integration['enable_otp_based_transaction'] \
 			if 'enable_otp_based_transaction' in config.bank_api_integration else None

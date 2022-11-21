@@ -16,16 +16,27 @@ from bank_api_integration.bank_api_integration.doctype.bank_api_integration.bank
 class OutwardBankPayment(Document):
 	def validate(self):
 		final_remark=""
-		symbols=[',','.','/','-']
+	#	symbols=[',','.','/','-']
 		for i in self.remarks:
-			if(i not in symbols):
+			if (ord(i) >= 65 and ord(i) <= 90) or (ord(i) >= 97 and ord(i) <= 122) or (ord(i) >= 48 and ord(i) <= 57):
 				final_remark+=i
 		if len(final_remark)>25:
-			final_remark=final_remark[0:25]
-		self.remarks=final_remark
+			final_remark = final_remark[0:25]
+		self.remarks = final_remark
 	def on_update(self):
 		is_authorized(self)
 	def on_change(self):
+		if "gta.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Pending" and self.owner != "Administrator":
+			user_list = frappe.db.sql("""Select c.company from `tabCompany Wise User` as c join `tabCompany Wise User Table` as ct on ct.parent = c.name where c.company != '{0}' and ct.user = '{1}' """.format(self.company,self.owner),as_dict = True)
+			if user_list:
+				credit_limit = frappe.db.get_value("Company",{"name":user_list[0].company},"credit_balance")
+				credit_limit -= self.amount
+				frappe.db.sql("""Update `tabCompany` set credit_balance = '{0}' where name = '{1}' """.format(credit_limit,user_list[0].company))
+
+		if "gta.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Pending" and self.party_type == "Supplier":
+			if frappe.db.get_value("Supplier",{"name":self.party},"whatsapp_no"):
+				self.mobile_no = "91"+frappe.db.get_value("Supplier",{"name":self.party},"whatsapp_no")
+
 		if self.bobp and not self.workflow_state == 'Pending':
 			status = 'Processing'
 			failed_doc_count = frappe.db.count('Outward Bank Payment', {'bobp': self.bobp, 'workflow_state': ['in',  ['Initiation Failed','Initiation Error', 'Transaction Error', 'Transaction Failed']]})
@@ -79,6 +90,11 @@ class OutwardBankPayment(Document):
 				})
 			self.create_payment_entry(references)
 
+		if self.reconcile_action == 'Skip Reconcile' and self.workflow_state == 'Transaction Completed':
+			references = []
+			self.create_payment_entry(references)
+
+
 	def create_payment_entry(self, references):
 		account_paid_from = frappe.db.get_value("Bank Account", self.company_bank_account, "account")
 		account_currency = frappe.db.get_value("Account", account_paid_from, "account_currency")
@@ -104,17 +120,18 @@ class OutwardBankPayment(Document):
 
 		payment_entry.insert()
 		payment_entry.submit()
-		
+
 		frappe.db.set_value(self.doctype, self.name, "payment_entry", payment_entry.name)
 
 @frappe.whitelist()
 def make_bank_payment(source_name, target_doc=None):
-	supplier=frappe.db.get_value("Purchase Order",{"name":source_name},"supplier")
+	supplier=frappe.db.get_value("Purchase Invoice",{"name":source_name},"supplier")
 	if(frappe.db.get_value("Bank Account",{"party":supplier},"is_default")):
 		#Assigning party type as supplier
 		def set_supplier(source_doc,target_doc,source_parent):
 			target_doc.party_type="Supplier"
 			target_doc.reconcile_action="Manual Reconcile"
+			target_doc.remarks = source_doc.items[0].item_code
 			target_doc.append('payment_references',{
 				'reference_name': source_doc.name,
 				'reference_doctype': 'Purchase Invoice',
@@ -129,7 +146,7 @@ def make_bank_payment(source_name, target_doc=None):
 				"doctype": "Outward Bank Payment",
 				"field_map": {
 					"supplier": "party",
-					"name" : "remarks",
+					#"name" : "remarks",
 					"outstanding_amount" : "amount" 
 				}
 				}

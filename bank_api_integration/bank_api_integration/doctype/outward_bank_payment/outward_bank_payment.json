@@ -125,6 +125,7 @@
    "fieldname": "transaction_type",
    "fieldtype": "Select",
    "label": "Transaction Type",
+   "options": "RTGS\nNEFT\nIMPS\nInternal Payments\nExternal Payments\nVirtual A/c Payments",
    "reqd": 1
   },
   {
@@ -189,7 +190,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2021-05-29 17:23:46.094297",
+ "modified": "2022-06-17 18:17:41.275512",
  "modified_by": "Administrator",
  "module": "Bank Api Integration",
  "name": "Outward Bank Payment",
