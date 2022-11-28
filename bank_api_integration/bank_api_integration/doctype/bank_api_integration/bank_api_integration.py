@@ -372,7 +372,7 @@ def fetch_account_statement(bank_account = None):
 		filters = {
 			"ACCOUNTNO": frappe.db.get_value('Bank Account',{'name':acc},'bank_account_no'),
 			"FROMDATE": from_date,
-			"TODATE": now_date
+			"TODATE":  now_date
 		}
 		try:
 			res = prov.fetch_statement_with_pagination(filters)
