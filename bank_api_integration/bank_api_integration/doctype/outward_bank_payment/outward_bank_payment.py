@@ -113,7 +113,8 @@ class OutwardBankPayment(Document):
 			"target_exchange_rate": 1,
 			"paid_from": account_paid_from,
 			"paid_from_account_currency": account_currency,
-			"references": references
+			"references": references,
+			"is_deposit":self.is_deposit
 		}
 		payment_entry = frappe.new_doc("Payment Entry")
 		payment_entry.update(payment_entry_dict)

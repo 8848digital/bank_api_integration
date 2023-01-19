@@ -48,14 +48,18 @@ def initiate_transaction_with_otp(docname, otp):
 				'is_default': 1
 				},'bank_account_no')
 	}
-	if frappe.utils.get_url() == "https://desk.lnder.in" and doc.against_customer:
+	if 'desk.lnder.in' in frappe.utils.get_url() and doc.against_customer:
 		if doc.recharge_type == "IOCL Recharge":
 			account = frappe.db.sql("""select va.account_no,b.ifsc_code from `tabBank Account` as b join `tabVirtual Account Details` as va on va.parent=b.name where va.customer = '{0}' and va.type = '{1}' and b.party='{2}' and b.is_default=1 """.format(doc.against_customer,"IOCL Recharge","IOCL"),as_dict=True)
 		if doc.recharge_type == "BPCL Recharge":
 			account = frappe.db.sql("""select va.account_no,b.ifsc_code from `tabBank Account` as b join `tabVirtual Account Details` as va on va.parent=b.name where va.customer = '{0}' and va.type = '{1}' and b.party='{2}' and b.is_default=1""".format(doc.against_customer,"BPCL Recharge","BPCL"),as_dict=True)
+		if doc.recharge_type == 'FasTag Recharge':
+			account = frappe.db.sql("""select va.account_no,b.ifsc_code from `tabBank Account` as b join `tabVirtual Account Details` as va on va.parent=b.name where va.customer = '{0}' and va.type = '{1}' and b.party='{2}' and b.is_default=1""".format(doc.against_customer,"FasTag Recharge","HDFC FASTag"),as_dict=True)
 		if account:
 			filters = {
+				"CUSTOMERINDUCED": "N",
 				"REMARKS": doc.remarks,
+				"OTP": otp,
 				"UNIQUEID": doc.name,
 				"IFSC": account[0]['ifsc_code'],
 				"AMOUNT": str(doc.amount),
@@ -229,7 +233,7 @@ def update_transaction_status(obp_name=None,bobp_name=None):
 	if bobp_name:
 		obp_list = frappe.db.get_all('Outward Bank Payment', {'workflow_state': ['in', ['Initiated','Initiation Pending','Transaction Pending']], 'bobp': ['=', bobp_name]})
 	if bulk_update:
-		obp_list = frappe.db.get_all('Outward Bank Payment', {'workflow_state': ['in', ['Initiated','Initiation Pending','Transaction Pending','Initiation Error']],'docstatus' : ['in',['0' , '1']]})
+		obp_list = frappe.db.get_all('Outward Bank Payment', {'workflow_state': ['in', ['Initiated','Initiation Pending','Transaction Pending','Initiation Error','Transaction Failed','Transaction Error']],'docstatus' : ['in',['0' , '1']]})
 
 	failed_obp_list = []
 	if not obp_list:
@@ -302,13 +306,25 @@ def get_api_provider_class(company_bank_account):
 def new_bank_transaction(transaction_list, bank_account):
 	for transaction in transaction_list:
 		if not frappe.db.exists("Bank Transaction", dict(transaction_id=transaction["txn_id"])):
+			utr=None
+			try:
+				withdrawal=abs(float(transaction['debit'].replace(',',''))) if transaction['debit'] else 0
+				deposit=abs(float(transaction['credit'].replace(',',''))) if transaction['credit'] else 0
+				if withdrawal>0:
+					utr,account = debit_utr(transaction['remarks'])
+				if deposit>0:
+					utr,account = credit_utr(transaction['remarks'])
+			except:
+				pass
 			new_transaction = frappe.get_doc({
 				'doctype': 'Bank Transaction',
 				'date': getdate(transaction['txn_date'].split(' ')[0]),
+				'status': "Unreconciled",
 				"transaction_id": transaction["txn_id"],
 				'withdrawal': abs(float(transaction['debit'].replace(',',''))) if transaction['debit'] else 0,
 				'deposit': abs(float(transaction['credit'].replace(',',''))) if transaction['credit'] else 0,
 				'description': transaction['remarks'],
+				'utr_no':utr,
 				'bank_account': bank_account
 			})
 			new_transaction.save()
@@ -693,3 +709,38 @@ def verify_and_initiate_transaction(doc, entered_password=None, otp=None):
 		if doc['doctype'] == 'Bulk Outward Bank Payment':
 			bobp = frappe.get_doc('Bulk Outward Bank Payment', doc['name'])
 			bobp.bulk_create_obp_records()
+
+
+@frappe.whitelist()
+def debit_utr(utr):
+	split_utr = utr.split("/")
+	if utr[0:3] in ["INF","MMT"]:
+		return split_utr[2],split_utr[4]
+	if utr[0:3] == "BIL":
+		return split_utr[2],split_utr[3]
+	if utr[0:3] == "CLG":
+		return False,split_utr[1]
+	if utr[0:3] in ["VIN","IIN","VSI"]:
+		return split_utr[3],split_utr[1]
+	if utr[0:3] in ["IMP","ONE","Mob","Sur","ECO","Dbt","CIB"]:
+		return "BANK CHARGES","BANK CHARGES"
+	if utr[0:3] in ["SGS","CGS"]:
+		return "TAX PAYMENT","TDS"
+@frappe.whitelist()
+def credit_utr(utr):
+	split_utr = utr.split("/")
+	if utr[0:3] in ["INF","MMT","BIL"]:
+		return split_utr[2],split_utr[4]
+	if utr[0:3] in ["NEF","RTG"]:
+		split_utr = utr.split("-")
+		return split_utr[1],split_utr[2]
+	if utr[0:3] in ["UPI"]:
+		return split_utr[1],split_utr[3]
+	if utr[0:3] in ["VIS"]:
+		return "CARD TRANSACTION",utr[9:]
+	if utr[0:3] in ["BY"]:
+		return "CASH DEPOSIT","CASH DEPOSIT"
+	if utr[0:3] in ["CAM"]:
+		return split_utr[1],False
+	if utr[0:3] in ["CLG"]:
+		return split_utr[2],split_utr[1]
