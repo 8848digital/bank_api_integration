@@ -210,7 +210,6 @@ def send_otp(doctype, docname):
 	}
 	try:
 		res = prov.send_otp(filters)
-		frappe.errprint(res)
 		if res['status'] == 'SUCCESS':
 			is_otp_sent = True
 	except:
@@ -305,7 +304,12 @@ def get_api_provider_class(company_bank_account):
 
 def new_bank_transaction(transaction_list, bank_account):
 	for transaction in transaction_list:
-		if not frappe.db.exists("Bank Transaction", dict(transaction_id=transaction["txn_id"])):
+		withdrawal_amt = abs(float(transaction['debit'].replace(',',''))) if transaction['debit'] else 0
+		deposit_amt = abs(float(transaction['credit'].replace(',',''))) if transaction['credit'] else 0
+		duplicate_record = frappe.db.sql("""select name from `tabBank Transaction` 
+						where date='{0}' and withdrawal='{1}' and deposit='{2}' and description='{3}'
+					""".format(getdate(transaction['txn_date'].split(' ')[0]),withdrawal_amt,deposit_amt,transaction['remarks']),as_dict=True)
+		if not duplicate_record:
 			utr=None
 			try:
 				withdrawal=abs(float(transaction['debit'].replace(',',''))) if transaction['debit'] else 0
@@ -316,19 +320,36 @@ def new_bank_transaction(transaction_list, bank_account):
 					utr,account = credit_utr(transaction['remarks'])
 			except:
 				pass
-			new_transaction = frappe.get_doc({
-				'doctype': 'Bank Transaction',
-				'date': getdate(transaction['txn_date'].split(' ')[0]),
-				'status': "Unreconciled",
-				"transaction_id": transaction["txn_id"],
-				'withdrawal': abs(float(transaction['debit'].replace(',',''))) if transaction['debit'] else 0,
-				'deposit': abs(float(transaction['credit'].replace(',',''))) if transaction['credit'] else 0,
-				'description': transaction['remarks'],
-				'utr_no':utr,
-				'bank_account': bank_account
-			})
-			new_transaction.save()
-			new_transaction.submit()
+			duplicate=None
+			if withdrawal_amt and utr and utr not in ["BANK CHARGES",None,"18971ORY","TAX PAYMENT","73711SRY","23492HHR","RETURN"]:
+				duplicate=frappe.db.get_value("Bank Transaction",{'utr_no':utr,'date':transaction['txn_date'].split(' ')[0],'deposit':0},'name')
+			elif deposit_amt and utr and utr not in ["BANK CHARGES",None,"18971ORY","TAX PAYMENT","73711SRY","23492HHR","RETURN"]:
+				duplicate=frappe.db.get_value("Bank Transaction",{'utr_no':utr,'date':transaction['txn_date'].split(' ')[0],'withdrawal':0},'name')
+			if duplicate:
+				existing_doc_name=duplicate
+				if existing_doc_name:
+					existing_doc=frappe.get_doc("Bank Transaction",existing_doc_name)
+					if withdrawal_amt and existing_doc.withdrawal:
+						if withdrawal_amt<existing_doc.withdrawal or withdrawal_amt<existing_doc.unallocated_amount:
+							frappe.db.sql("Update `tabBank Transaction` set withdrawal='{0}',unallocated_amount='{0}' where name='{1}'".format(withdrawal_amt,existing_doc.name))
+
+					if deposit_amt and existing_doc.deposit:
+						if deposit_amt<existing_doc.deposit or deposit_amt<existing_doc.unallocated_amount:
+							frappe.db.sql("Update `tabBank Transaction` set deposit='{0}',unallocated_amount='{0}' where name='{1}'".format(deposit_amt,existing_doc.name))
+			else:
+				new_transaction = frappe.get_doc({
+					'doctype': 'Bank Transaction',
+					'date': getdate(transaction['txn_date'].split(' ')[0]),
+					'status': "Unreconciled",
+					"transaction_id": transaction["txn_id"],
+					'withdrawal': abs(float(transaction['debit'].replace(',',''))) if transaction['debit'] else 0,
+					'deposit': abs(float(transaction['credit'].replace(',',''))) if transaction['credit'] else 0,
+					'description': transaction['remarks'],
+					'utr_no':utr,
+					'bank_account': bank_account
+				})
+				new_transaction.save()
+				new_transaction.submit()
 	return True
 
 @frappe.whitelist()
@@ -388,7 +409,7 @@ def fetch_account_statement(bank_account = None):
 		filters = {
 			"ACCOUNTNO": frappe.db.get_value('Bank Account',{'name':acc},'bank_account_no'),
 			"FROMDATE": from_date,
-			"TODATE":  now_date
+			"TODATE": now_date
 		}
 		try:
 			res = prov.fetch_statement_with_pagination(filters)
@@ -418,8 +439,8 @@ def fetch_account_statement(bank_account = None):
 					frappe.msgprint(_("""Statements updated"""))
 		except:
 			res = frappe.get_traceback()
-		
 		log_name = log_request(bank_account, 'Fetch Account Statement', filters, config, res)
+		print(res)
 		if isinstance(res, dict):
 			if 'status' in res and res['status']== 'FAILURE' and bank_account:
 				frappe.throw(_(f'Unable to fetch statement.Please check log {get_link_to_form("Bank API Request Log", log_name)} for more info.'))
