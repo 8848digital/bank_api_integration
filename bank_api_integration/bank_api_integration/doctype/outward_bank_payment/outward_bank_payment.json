@@ -25,6 +25,9 @@
   "payment_entry",
   "column_break_15",
   "utr_number",
+  "is_cib_api",
+  "cms_number",
+  "is_bulk_payout_api",
   "reconcile_section",
   "get_outstanding_invoice",
   "payment_references",
@@ -185,12 +188,29 @@
    "label": "Is Verified",
    "no_copy": 1,
    "read_only": 1
+  },
+  {
+   "fieldname": "cms_number",
+   "fieldtype": "Data",
+   "label": "CMS Number"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_bulk_payout_api",
+   "fieldtype": "Check",
+   "label": "Is Bulk Payout API"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_cib_api",
+   "fieldtype": "Check",
+   "label": "Is CIB API"
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2022-06-17 18:17:41.275512",
+ "modified": "2023-04-10 12:33:06.511927",
  "modified_by": "Administrator",
  "module": "Bank Api Integration",
  "name": "Outward Bank Payment",

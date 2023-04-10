@@ -230,9 +230,9 @@ def update_transaction_status(obp_name=None,bobp_name=None):
 	if obp_name:
 		obp_list = [{'name': obp_name}]
 	if bobp_name:
-		obp_list = frappe.db.get_all('Outward Bank Payment', {'workflow_state': ['in', ['Initiated','Initiation Pending','Transaction Pending']], 'bobp': ['=', bobp_name]})
+		obp_list = frappe.db.get_all('Outward Bank Payment', {'workflow_state': ['in', ['Initiated','Initiation Pending','Transaction Pending']], 'bobp': ['=', bobp_name],'is_bulk_payout_api':0})
 	if bulk_update:
-		obp_list = frappe.db.get_all('Outward Bank Payment', {'workflow_state': ['in', ['Initiated','Initiation Pending','Transaction Pending','Initiation Error','Transaction Failed','Transaction Error']],'docstatus' : ['in',['0' , '1']]})
+		obp_list = frappe.db.get_all('Outward Bank Payment', {'workflow_state': ['in', ['Initiated','Initiation Pending','Transaction Pending','Initiation Error','Transaction Failed','Transaction Error']],'docstatus' : ['in',['0' , '1']],'is_bulk_payout_api':0})
 
 	failed_obp_list = []
 	if not obp_list:
