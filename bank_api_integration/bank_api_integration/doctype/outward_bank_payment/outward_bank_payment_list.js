@@ -68,6 +68,40 @@ frappe.listview_settings['Outward Bank Payment'] = {
                                         });
                                         d.show();
                                         }).addClass("btn-primary");
+					listview.page.add_action_item(__('Process Payment With Bulk Payout'), function() {
+						let d = new frappe.ui.Dialog({
+						title: '',
+						fields: [
+								{
+									label: 'Transaction Password',
+									fieldname: 'transaction_password',
+									fieldtype: 'Password',
+									reqd:1
+								}
+							],
+						primary_action_label: 'Submit',
+						primary_action(values) {
+						d.hide();
+						var checked_value = []
+						var l = listview.$checks.length;
+						for(let row = 0; row<l; row++){
+							checked_value.push(listview.$checks[row].dataset.name)
+						}
+															frappe.call({
+																	method: 'ogive_api.api.process_payment_with_bulk_payout',
+																	args: {
+																			"obp_list" : checked_value,
+																			"password" : values.transaction_password
+																	},
+																	async:false,
+																	callback: function(r) {
+																			cur_list.refresh()
+																	}
+															});
+						}
+					});
+					d.show();
+					}).addClass("btn-primary");
 					listview.page.add_action_item(__('Verify and Initiate Payment'), function() {
 						let d = new frappe.ui.Dialog({
 						title: '',
