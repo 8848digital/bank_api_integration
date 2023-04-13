@@ -26,7 +26,6 @@
   "column_break_15",
   "utr_number",
   "is_cib_api",
-  "cms_number",
   "is_bulk_payout_api",
   "reconcile_section",
   "get_outstanding_invoice",
@@ -152,6 +151,7 @@
    "fieldtype": "Column Break"
   },
   {
+   "allow_on_submit": 1,
    "fieldname": "utr_number",
    "fieldtype": "Data",
    "label": "UTR Number",
@@ -190,27 +190,26 @@
    "read_only": 1
   },
   {
-   "fieldname": "cms_number",
-   "fieldtype": "Data",
-   "label": "CMS Number"
-  },
-  {
+   "allow_on_submit": 1,
    "default": "0",
    "fieldname": "is_bulk_payout_api",
    "fieldtype": "Check",
-   "label": "Is Bulk Payout API"
+   "label": "Is Bulk Payout API",
+   "read_only": 1
   },
   {
+   "allow_on_submit": 1,
    "default": "0",
    "fieldname": "is_cib_api",
    "fieldtype": "Check",
-   "label": "Is CIB API"
+   "label": "Is CIB API",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2023-04-10 12:33:06.511927",
+ "modified": "2023-04-11 11:50:24.062225",
  "modified_by": "Administrator",
  "module": "Bank Api Integration",
  "name": "Outward Bank Payment",
