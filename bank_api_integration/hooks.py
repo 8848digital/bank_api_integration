@@ -91,13 +91,11 @@ after_install = "bank_api_integration.bank_api_integration.doctype.bank_api_inte
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-#	}
-# }
+doc_events = {
+	"Outward Bank Payment": {
+		"autoname": "bank_api_integration.naming_series.name_outward_bank_payment"
+	}
+}
 
 # Scheduled Tasks
 # ---------------

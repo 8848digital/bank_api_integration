@@ -49,6 +49,7 @@ def initiate_transaction_with_otp(docname, otp):
 				},'bank_account_no')
 	}
 	if 'desk.lnder.in' in frappe.utils.get_url() and doc.against_customer:
+		account=None
 		if doc.recharge_type == "IOCL Recharge":
 			account = frappe.db.sql("""select va.account_no,b.ifsc_code from `tabBank Account` as b join `tabVirtual Account Details` as va on va.parent=b.name where va.customer = '{0}' and va.type = '{1}' and b.party='{2}' and b.is_default=1 """.format(doc.against_customer,"IOCL Recharge","IOCL"),as_dict=True)
 		if doc.recharge_type == "BPCL Recharge":
@@ -247,7 +248,7 @@ def update_transaction_status(obp_name=None,bobp_name=None):
 		filters = {"UNIQUEID": obp_doc.name if not unique_id else unique_id}
 		try:
 			res = prov.get_transaction_status(filters)
-			if res['status'] == 'SUCCESS' and 'utr_number' in res and obp_doc.workflow_state == "Initiation Error":
+			if res['status'] == 'SUCCESS' and 'utr_number' in res:
 				obp_doc.utr_number = res["utr_number"]
 			if res['status'] == 'SUCCESS' and 'utr_number' in res:
 				workflow_state = 'Transaction Completed'

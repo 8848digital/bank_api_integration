@@ -97,13 +97,12 @@
   {
    "fieldname": "over_all_response",
    "fieldtype": "Small Text",
-   "hidden": 1,
    "label": "Over All Response"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2023-04-13 14:26:40.396424",
+ "modified": "2023-04-17 14:22:13.005337",
  "modified_by": "Administrator",
  "module": "Bank Api Integration",
  "name": "Reverse MIS Bank API Request Log",
