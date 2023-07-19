@@ -34,6 +34,12 @@ class OutwardBankPayment(Document):
 	def on_update(self):
 		is_authorized(self)
 	def on_change(self):
+		if "gta.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Transaction Completed":
+			if self.payment_references:
+				for row in self.payment_references:
+					if row.reference_doctype == "GTA Service Allocation" and row.reference_name:
+						frappe.db.sql("""Update `tabGTA Service Allocation` set paid_amount = {0},paid_doc_ref = '{2}' where name = '{1}'
+                    					""".format(row.allocated_amount,row.reference_name,self.name))
 		if "gta.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Pending" and self.owner != "Administrator":
 			user_list = frappe.db.sql("""Select c.company from `tabCompany Wise User` as c join `tabCompany Wise User Table` as ct on ct.parent = c.name where c.company != '{0}' and ct.user = '{1}' """.format(self.company,self.owner),as_dict = True)
 			if user_list:
