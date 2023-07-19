@@ -13,6 +13,7 @@ from erpnext.controllers.accounts_controller import get_supplier_block_status
 from erpnext.accounts.utils import get_outstanding_invoices, get_account_currency
 from frappe.utils import add_months, nowdate
 from bank_api_integration.bank_api_integration.doctype.bank_api_integration.bank_api_integration import is_authorized
+from erpnext.accounts.party import get_party_account
 class OutwardBankPayment(Document):
 	def validate(self):
 		final_remark=""
@@ -23,6 +24,13 @@ class OutwardBankPayment(Document):
 		if len(final_remark)>25:
 			final_remark = final_remark[0:25]
 		self.remarks = final_remark
+		# update paid amount in gta service allocation
+		if "gta.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Transaction Completed":
+			if self.payment_references:
+				for row in self.payment_references:
+					if row.reference_doctype == "GTA Service Allocation" and row.reference_name:
+						frappe.db.sql("""Update `tabGTA Service Allocation` set paid_amount = {0},paid_doc_ref = '{2}' where name = '{1}'
+                    					""".format(row.allocated_amount,row.reference_name,self.name))
 	def on_update(self):
 		is_authorized(self)
 	def on_change(self):
@@ -75,20 +83,35 @@ class OutwardBankPayment(Document):
 					})
 					amount-= inv['grand_total']
 			self.create_payment_entry(references)
-		if self.reconcile_action == 'Manual Reconcile' and self.workflow_state == 'Transaction Completed':
-			references = []
+		if self.reconcile_action == 'Manual Reconcile' and self.workflow_state == 'Approved':
+			purchase_invoice_references = []
+			gta_service_allocation_references = []
 			for row in self.payment_references:
-				references.append({
-				'reference_doctype': row.reference_doctype,
-				'reference_name': row.reference_name,
-				'bill_no': row.bill_no,
-				'due_date': row.due_date,
-				'total_amount': row.total_amount,
-				'outstanding_amount': row.outstanding_amount,
-				'allocated_amount': row.allocated_amount,
-				'exchange_rate': row.exchange_rate
-				})
-			self.create_payment_entry(references)
+				if row.reference_doctype == "Purchase Invoice" and row.reference_name:
+					purchase_invoice_references.append({
+						'reference_doctype': row.reference_doctype,
+						'reference_name': row.reference_name,
+						'bill_no': row.bill_no,
+						'due_date': row.due_date,
+						'total_amount': row.total_amount,
+						'outstanding_amount': row.outstanding_amount,
+						'allocated_amount': row.allocated_amount,
+						'exchange_rate': row.exchange_rate
+					})
+				if row.reference_doctype == "GTA Service Allocation" and row.reference_name:
+					gta_service_allocation_references.append({
+						'reference_doctype': row.reference_doctype,
+						'reference_name': row.reference_name,
+						'total_amount': row.total_amount,
+						'outstanding_amount': row.outstanding_amount,
+						'allocated_amount': row.allocated_amount,
+					})
+			if purchase_invoice_references:
+				references = purchase_invoice_references
+				self.create_payment_entry(references)
+			if gta_service_allocation_references:
+				references = gta_service_allocation_references
+				self.create_gta_service_journal(references)
 
 		if self.reconcile_action == 'Skip Reconcile' and self.workflow_state == 'Transaction Completed':
 			references = []
@@ -123,7 +146,36 @@ class OutwardBankPayment(Document):
 		payment_entry.submit()
 
 		frappe.db.set_value(self.doctype, self.name, "payment_entry", payment_entry.name)
-
+  
+	@frappe.whitelist()
+	def create_gta_service_journal(self,references):
+		account_paid_from = frappe.db.get_value("Bank Account", self.company_bank_account, "account")
+		accounts=[]
+		for row in references:
+			print(row)
+			gta_service_allocation_details=frappe.db.get_value("GTA Service Allocation",{'name':row.get('reference_name')},['customer'],as_dict=True)
+			default_party_recevieable_account=get_party_account('Customer',gta_service_allocation_details.get('customer'),self.company) or frappe.db.get_value("Company",self.company,"default_receivable_account")
+			accounts.append({
+				"account":account_paid_from,
+				"credit_in_account_currency":row.get('allocated_amount')
+			})
+			accounts.append({
+				"account": default_party_recevieable_account,
+				"party_type": "Customer",
+				"party": gta_service_allocation_details.get('customer'),
+				"debit_in_account_currency": row.get('allocated_amount'),
+				"reference_type": "GTA Service Allocation",
+				"reference_name": row.get('reference_name')
+			})
+		if accounts:
+			je = frappe.new_doc("Journal Entry")
+			je.outward_bank_payment = self.name
+			je.posting_date = today()
+			je.cheque_no = self.utr_number
+			je.cheque_date = today()
+			je.extend("accounts",accounts)
+			je.user_remark = "GTA Service Allocation - " + self.name
+			je.save(ignore_permissions = True)
 @frappe.whitelist()
 def make_bank_payment(source_name, target_doc=None):
 	supplier=frappe.db.get_value("Purchase Invoice",{"name":source_name},"supplier")
