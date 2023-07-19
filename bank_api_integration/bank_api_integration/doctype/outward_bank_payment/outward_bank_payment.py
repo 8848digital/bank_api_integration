@@ -83,7 +83,7 @@ class OutwardBankPayment(Document):
 					})
 					amount-= inv['grand_total']
 			self.create_payment_entry(references)
-		if self.reconcile_action == 'Manual Reconcile' and self.workflow_state == 'Approved':
+		if self.reconcile_action == 'Manual Reconcile' and self.workflow_state == 'Transaction Completed':
 			purchase_invoice_references = []
 			gta_service_allocation_references = []
 			for row in self.payment_references:
