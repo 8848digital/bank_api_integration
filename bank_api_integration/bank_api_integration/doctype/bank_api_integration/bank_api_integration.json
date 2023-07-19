@@ -29,11 +29,7 @@
   "transaction_password",
   "on_process",
   "completed",
-  "pending",
-  "section_break_rawlo",
-  "bulk_payout_on_process",
-  "bulk_payout_completed",
-  "bulk_payout_pending"
+  "pending"
  ],
  "fields": [
   {
@@ -189,31 +185,11 @@
    "fieldtype": "Data",
    "label": "Pending",
    "read_only": 1
-  },
-  {
-   "fieldname": "section_break_rawlo",
-   "fieldtype": "Section Break"
-  },
-  {
-   "default": "0",
-   "fieldname": "bulk_payout_on_process",
-   "fieldtype": "Check",
-   "label": "Bulk Payout On Process"
-  },
-  {
-   "fieldname": "bulk_payout_completed",
-   "fieldtype": "Data",
-   "label": "Bulk Payout Completed"
-  },
-  {
-   "fieldname": "bulk_payout_pending",
-   "fieldtype": "Data",
-   "label": "Bulk Payout Pending"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2023-04-10 11:37:10.325348",
+ "modified": "2023-04-17 13:13:51.012575",
  "modified_by": "Administrator",
  "module": "Bank Api Integration",
  "name": "Bank API Integration",
