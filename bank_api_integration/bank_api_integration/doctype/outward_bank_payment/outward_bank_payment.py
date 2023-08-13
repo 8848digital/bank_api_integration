@@ -25,21 +25,23 @@ class OutwardBankPayment(Document):
 			final_remark = final_remark[0:25]
 		self.remarks = final_remark
 		# update paid amount in gta service allocation
-		if "gta.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Transaction Completed":
+		if "desk.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Transaction Completed":
 			if self.payment_references:
 				for row in self.payment_references:
-					if row.reference_doctype == "GTA Service Allocation" and row.reference_name:
-						frappe.db.sql("""Update `tabGTA Service Allocation` set paid_amount = {0},paid_doc_ref = '{2}' where name = '{1}'
-                    					""".format(row.allocated_amount,row.reference_name,self.name))
+					if row.reference_doctype == "Payment Order Detail" and row.reference_name:
+						previous_paid_amt = frappe.db.get_value("Payment Order Detail",{"name":row.reference_name},"paid_amount")
+						frappe.db.sql("""Update `tabPayment Order Detail` set paid_amount = {0},paid_doc_ref = '{2}' where name = '{1}'
+                    					""".format((previous_paid_amt+row.allocated_amount),row.reference_name,self.name))
 	def on_update(self):
 		is_authorized(self)
 	def on_change(self):
-		if "gta.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Transaction Completed":
+		if "desk.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Transaction Completed":
 			if self.payment_references:
 				for row in self.payment_references:
-					if row.reference_doctype == "GTA Service Allocation" and row.reference_name:
-						frappe.db.sql("""Update `tabGTA Service Allocation` set paid_amount = {0},paid_doc_ref = '{2}' where name = '{1}'
-                    					""".format(row.allocated_amount,row.reference_name,self.name))
+					if row.reference_doctype == "Payment Order Detail" and row.reference_name:
+						previous_paid_amt = frappe.db.get_value("Payment Order Detail",{"name":row.reference_name},"paid_amount")
+						frappe.db.sql("""Update `tabPayment Order Detail` set paid_amount = {0},paid_doc_ref = '{2}' where name = '{1}'
+                    					""".format((previous_paid_amt+row.allocated_amount),row.reference_name,self.name))
 		if "gta.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Pending" and self.owner != "Administrator":
 			user_list = frappe.db.sql("""Select c.company from `tabCompany Wise User` as c join `tabCompany Wise User Table` as ct on ct.parent = c.name where c.company != '{0}' and ct.user = '{1}' """.format(self.company,self.owner),as_dict = True)
 			if user_list:
@@ -91,7 +93,7 @@ class OutwardBankPayment(Document):
 			self.create_payment_entry(references)
 		if self.reconcile_action == 'Manual Reconcile' and self.workflow_state == 'Transaction Completed':
 			purchase_invoice_references = []
-			gta_service_allocation_references = []
+			payment_order_detail_references = []
 			for row in self.payment_references:
 				if row.reference_doctype == "Purchase Invoice" and row.reference_name:
 					purchase_invoice_references.append({
@@ -104,8 +106,8 @@ class OutwardBankPayment(Document):
 						'allocated_amount': row.allocated_amount,
 						'exchange_rate': row.exchange_rate
 					})
-				if row.reference_doctype == "GTA Service Allocation" and row.reference_name:
-					gta_service_allocation_references.append({
+				if row.reference_doctype == "Payment Order Detail" and row.reference_name:
+					payment_order_detail_references.append({
 						'reference_doctype': row.reference_doctype,
 						'reference_name': row.reference_name,
 						'total_amount': row.total_amount,
@@ -115,9 +117,9 @@ class OutwardBankPayment(Document):
 			if purchase_invoice_references:
 				references = purchase_invoice_references
 				self.create_payment_entry(references)
-			if gta_service_allocation_references:
-				references = gta_service_allocation_references
-				self.create_gta_service_journal(references)
+			if payment_order_detail_references:
+				references = payment_order_detail_references
+				self.create_payment_order_detail_journal(references)
 
 		if self.reconcile_action == 'Skip Reconcile' and self.workflow_state == 'Transaction Completed':
 			references = []
@@ -154,12 +156,12 @@ class OutwardBankPayment(Document):
 		frappe.db.set_value(self.doctype, self.name, "payment_entry", payment_entry.name)
   
 	@frappe.whitelist()
-	def create_gta_service_journal(self,references):
+	def create_payment_order_detail_journal(self,references):
 		account_paid_from = frappe.db.get_value("Bank Account", self.company_bank_account, "account")
 		accounts=[]
 		for row in references:
 			print(row)
-			gta_service_allocation_details=frappe.db.get_value("GTA Service Allocation",{'name':row.get('reference_name')},['customer'],as_dict=True)
+			gta_service_allocation_details=frappe.db.get_value("Payment Order Detail",{'name':row.get('reference_name')},['super_customer'],as_dict=True)
 			default_party_recevieable_account=get_party_account('Customer',gta_service_allocation_details.get('customer'),self.company) or frappe.db.get_value("Company",self.company,"default_receivable_account")
 			accounts.append({
 				"account":account_paid_from,
@@ -168,9 +170,9 @@ class OutwardBankPayment(Document):
 			accounts.append({
 				"account": default_party_recevieable_account,
 				"party_type": "Customer",
-				"party": gta_service_allocation_details.get('customer'),
+				"party": gta_service_allocation_details.get('super_customer'),
 				"debit_in_account_currency": row.get('allocated_amount'),
-				"reference_type": "GTA Service Allocation",
+				"reference_type": "Payment Order Detail",
 				"reference_name": row.get('reference_name')
 			})
 		if accounts:
@@ -180,7 +182,7 @@ class OutwardBankPayment(Document):
 			je.cheque_no = self.utr_number
 			je.cheque_date = today()
 			je.extend("accounts",accounts)
-			je.user_remark = "GTA Service Allocation - " + self.name
+			je.user_remark = "Payment Order Detail - " + self.name
 			je.save(ignore_permissions = True)
 @frappe.whitelist()
 def make_bank_payment(source_name, target_doc=None):
