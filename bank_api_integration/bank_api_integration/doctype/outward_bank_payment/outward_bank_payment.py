@@ -171,9 +171,7 @@ class OutwardBankPayment(Document):
 				"account": default_party_recevieable_account,
 				"party_type": "Customer",
 				"party": gta_service_allocation_details.get('super_customer'),
-				"debit_in_account_currency": row.get('allocated_amount'),
-				"reference_type": "Payment Order Detail",
-				"reference_name": row.get('reference_name')
+				"debit_in_account_currency": row.get('allocated_amount')
 			})
 		if accounts:
 			je = frappe.new_doc("Journal Entry")
