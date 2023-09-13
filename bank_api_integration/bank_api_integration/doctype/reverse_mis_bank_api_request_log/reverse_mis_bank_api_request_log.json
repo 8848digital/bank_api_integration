@@ -10,6 +10,7 @@
   "response",
   "column_break_7",
   "timestamp",
+  "pay_date",
   "party_type",
   "party",
   "party_account_number",
@@ -98,11 +99,16 @@
    "fieldname": "over_all_response",
    "fieldtype": "Small Text",
    "label": "Over All Response"
+  },
+  {
+   "fieldname": "pay_date",
+   "fieldtype": "Date",
+   "label": "Pay Date"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2023-04-17 14:22:13.005337",
+ "modified": "2023-09-13 15:41:12.731156",
  "modified_by": "Administrator",
  "module": "Bank Api Integration",
  "name": "Reverse MIS Bank API Request Log",
