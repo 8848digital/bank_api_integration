@@ -25,13 +25,13 @@ class OutwardBankPayment(Document):
 			final_remark = final_remark[0:25]
 		self.remarks = final_remark
 		# update paid amount in gta service allocation
-		if "desk.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Transaction Completed":
-			if self.payment_references:
-				for row in self.payment_references:
-					if row.reference_doctype == "Payment Order Detail" and row.reference_name:
-						previous_paid_amt = frappe.db.get_value("Payment Order Detail",{"name":row.reference_name},"paid_amount")
-						frappe.db.sql("""Update `tabPayment Order Detail` set paid_amount = {0},paid_doc_ref = '{2}' where name = '{1}'
-                    					""".format((previous_paid_amt+row.allocated_amount),row.reference_name,self.name))
+		# if "desk.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Transaction Completed":
+		# 	if self.payment_references:
+		# 		for row in self.payment_references:
+		# 			if row.reference_doctype == "Payment Order Detail" and row.reference_name:
+		# 				previous_paid_amt = frappe.db.get_value("Payment Order Detail",{"name":row.reference_name},"paid_amount")
+		# 				frappe.db.sql("""Update `tabPayment Order Detail` set paid_amount = {0},paid_doc_ref = '{2}' where name = '{1}'
+        #             					""".format((previous_paid_amt+row.allocated_amount),row.reference_name,self.name))
 	def on_update(self):
 		is_authorized(self)
 	def on_change(self):
