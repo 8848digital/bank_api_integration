@@ -35,7 +35,8 @@ class OutwardBankPayment(Document):
 	def on_update(self):
 		is_authorized(self)
 	def on_change(self):
-		if "desk.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Transaction Completed":
+		doc = self.get_doc_before_save()
+		if "desk.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Transaction Completed" and not doc.workflow_state == "Transaction Completed":
 			if self.payment_references:
 				for row in self.payment_references:
 					if row.reference_doctype == "Payment Order Detail" and row.reference_name:
@@ -74,7 +75,7 @@ class OutwardBankPayment(Document):
 							'amount': self.amount,
 							'outward_bank_payment': self.name},'status', self.workflow_state)
 			frappe.db.commit()
-		if self.reconcile_action == 'Auto Reconcile Oldest First Invoice' and self.workflow_state == 'Transaction Completed':
+		if self.reconcile_action == 'Auto Reconcile Oldest First Invoice' and self.workflow_state == 'Transaction Completed' and not doc.workflow_state == "Transaction Completed":
 			references = []
 			amount = self.amount
 			month_threshold = -6
@@ -91,7 +92,7 @@ class OutwardBankPayment(Document):
 					})
 					amount-= inv['grand_total']
 			self.create_payment_entry(references)
-		if self.reconcile_action == 'Manual Reconcile' and self.workflow_state == 'Transaction Completed':
+		if self.reconcile_action == 'Manual Reconcile' and self.workflow_state == 'Transaction Completed' and not doc.workflow_state == "Transaction Completed":
 			purchase_invoice_references = []
 			payment_order_detail_references = []
 			for row in self.payment_references:
