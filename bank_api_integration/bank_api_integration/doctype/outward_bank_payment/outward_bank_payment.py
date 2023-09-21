@@ -123,9 +123,22 @@ class OutwardBankPayment(Document):
 				self.create_payment_order_detail_journal(references)
 
 		if self.reconcile_action == 'Skip Reconcile' and self.workflow_state == 'Transaction Completed':
-			references = []
-			self.create_payment_entry(references)
-
+			payment_order_detail_references = []
+			for row in self.payment_references:
+				if row.reference_doctype == "Payment Order Detail" and row.reference_name:
+					payment_order_detail_references.append({
+						'reference_doctype': row.reference_doctype,
+						'reference_name': row.reference_name,
+						'total_amount': row.total_amount,
+						'outstanding_amount': row.outstanding_amount,
+						'allocated_amount': row.allocated_amount,
+					})
+			if payment_order_detail_references:
+				references = payment_order_detail_references
+				self.create_payment_order_detail_journal(references)
+			else:
+				references = []
+				self.create_payment_entry(references)
 
 	def create_payment_entry(self, references):
 		account_paid_from = frappe.db.get_value("Bank Account", self.company_bank_account, "account")
@@ -161,7 +174,6 @@ class OutwardBankPayment(Document):
 		account_paid_from = frappe.db.get_value("Bank Account", self.company_bank_account, "account")
 		accounts=[]
 		for row in references:
-			print(row)
 			gta_service_allocation_details=frappe.db.get_value("Payment Order Detail",{'name':row.get('reference_name')},['super_customer'],as_dict=True)
 			default_party_recevieable_account=get_party_account('Customer',gta_service_allocation_details.get('customer'),self.company) or frappe.db.get_value("Company",self.company,"default_receivable_account")
 			accounts.append({
