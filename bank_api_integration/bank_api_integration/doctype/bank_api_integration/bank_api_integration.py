@@ -322,9 +322,9 @@ def new_bank_transaction(transaction_list, bank_account):
 			except:
 				pass
 			duplicate=None
-			if withdrawal_amt and utr and utr not in ["BANK CHARGES",None,"18971ORY","TAX PAYMENT","73711SRY","23492HHR","RETURN"]:
+			if withdrawal_amt and utr and utr not in ["BANK CHARGES",None,"18971ORY","TAX PAYMENT","73711SRY","23492HHR","RETURN","44621NCR"]:
 				duplicate=frappe.db.get_value("Bank Transaction",{'utr_no':utr,'date':transaction['txn_date'].split(' ')[0],'deposit':0},'name')
-			elif deposit_amt and utr and utr not in ["BANK CHARGES",None,"18971ORY","TAX PAYMENT","73711SRY","23492HHR","RETURN"]:
+			elif deposit_amt and utr and utr not in ["BANK CHARGES",None,"18971ORY","TAX PAYMENT","73711SRY","23492HHR","RETURN","44621NCR"]:
 				duplicate=frappe.db.get_value("Bank Transaction",{'utr_no':utr,'date':transaction['txn_date'].split(' ')[0],'withdrawal':0},'name')
 			if duplicate:
 				existing_doc_name=duplicate
