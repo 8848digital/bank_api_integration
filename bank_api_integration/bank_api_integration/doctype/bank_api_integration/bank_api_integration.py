@@ -110,11 +110,6 @@ def initiate_transaction_without_otp(docname):
 	filters = {
 		"REMARKS": doc.remarks,
 		"UNIQUEID": doc.name,
-		"IFSC": frappe.db.get_value('Bank Account',
-				{'party_type': doc.party_type,
-				'party': doc.party,
-				'is_default': 1
-				},'ifsc_code'),
 		"AMOUNT": str(doc.amount),
 		"CURRENCY": currency,
 		"TXNTYPE": doc.transaction_type,
@@ -129,6 +124,14 @@ def initiate_transaction_without_otp(docname):
 				'is_default': 1
 				},'bank_account_no')
 	}
+	#Settingup Default IFSC for ICICI
+	company_bank_account=frappe.db.get_value('Bank Account',{'name':doc.company_bank_account},'bank')
+	bank_acc_details=frappe.db.get_value('Bank Account',{'party_type': doc.party_type,'party': doc.party,'is_default': 1},['bank','ifsc_code'],as_dict=True)
+	if company_bank_account == 'ICICI' and bank_acc_details.get('bank') == 'ICICI':
+		filters['IFSC'] = "ICIC0000011"
+	else:
+		filters['IFSC'] = bank_acc_details.get('ifsc_code')
+	##
 	if frappe.utils.get_url() == "https://desk.lnder.in" and doc.against_customer:
 		if doc.recharge_type == "IOCL Recharge":
 			account = frappe.db.sql("""select va.account_no,b.ifsc_code from `tabBank Account` as b join `tabVirtual Account Details` as va on va.parent=b.name where va.customer = '{0}' and va.type = '{1}' and b.party='{2}' and b.is_default=1 """.format(doc.against_customer,"IOCL Recharge","IOCL"),as_dict=True)
