@@ -187,6 +187,7 @@ class OutwardBankPayment(Document):
 			je.extend("accounts",accounts)
 			je.user_remark = "Payment Order Detail - " + self.name
 			je.save(ignore_permissions = True)
+			je.submit()
 @frappe.whitelist()
 def make_bank_payment(source_name, target_doc=None):
 	supplier=frappe.db.get_value("Purchase Invoice",{"name":source_name},"supplier")
