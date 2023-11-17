@@ -29,11 +29,6 @@ def initiate_transaction_with_otp(docname, otp):
 		"REMARKS": doc.remarks,
 		"OTP": otp,
 		"UNIQUEID": doc.name,
-		"IFSC": frappe.db.get_value('Bank Account', 
-				{'party_type': doc.party_type,
-				'party': doc.party,
-				'is_default': 1
-				},'ifsc_code'),
 		"AMOUNT": str(doc.amount),
 		"CURRENCY": currency,
 		"TXNTYPE": doc.transaction_type,
@@ -48,6 +43,14 @@ def initiate_transaction_with_otp(docname, otp):
 				'is_default': 1
 				},'bank_account_no')
 	}
+	#Settingup Default IFSC for ICICI
+	company_bank_account=frappe.db.get_value('Bank Account',{'name':doc.company_bank_account},'bank')
+	bank_acc_details=frappe.db.get_value('Bank Account',{'party_type': doc.party_type,'party': doc.party,'is_default': 1},['bank','ifsc_code'],as_dict=True)
+	if company_bank_account == 'ICICI' and bank_acc_details.get('bank') == 'ICICI':
+		filters['IFSC'] = "ICIC0000011"
+	else:
+		filters['IFSC'] = bank_acc_details.get('ifsc_code')
+	##
 	if 'desk.lnder.in' in frappe.utils.get_url() and doc.against_customer:
 		account=None
 		if doc.recharge_type == "IOCL Recharge":
