@@ -14,6 +14,8 @@ from erpnext.accounts.utils import get_outstanding_invoices, get_account_currenc
 from frappe.utils import add_months, nowdate
 from bank_api_integration.bank_api_integration.doctype.bank_api_integration.bank_api_integration import is_authorized
 from erpnext.accounts.party import get_party_account
+from urllib.parse import urlparse
+
 class OutwardBankPayment(Document):
 	def validate(self):
 		final_remark=""
@@ -27,22 +29,24 @@ class OutwardBankPayment(Document):
 	def on_update(self):
 		is_authorized(self)
 	def on_change(self):
+		parsed_url = urlparse(frappe.utils.get_url())
+		site_name = parsed_url.netloc
 		doc = self.get_doc_before_save()
-		if "desk.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Transaction Completed" and not doc.workflow_state == "Transaction Completed":
+		if "desk.lnder.in" == site_name and self.workflow_state == "Transaction Completed" and not doc.workflow_state == "Transaction Completed":
 			if self.payment_references:
 				for row in self.payment_references:
 					if row.reference_doctype == "Payment Order Detail" and row.reference_name:
 						previous_paid_amt = frappe.db.get_value("Payment Order Detail",{"name":row.reference_name},"paid_amount")
 						frappe.db.sql("""Update `tabPayment Order Detail` set paid_amount = {0},paid_doc_ref = '{2}' where name = '{1}'
                     					""".format((previous_paid_amt+row.allocated_amount),row.reference_name,self.name))
-		if "gta.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Pending" and self.owner != "Administrator":
+		if "gta.lnder.in" == site_name and self.workflow_state == "Pending" and self.owner != "Administrator":
 			user_list = frappe.db.sql("""Select c.company from `tabCompany Wise User` as c join `tabCompany Wise User Table` as ct on ct.parent = c.name where c.company != '{0}' and ct.user = '{1}' """.format(self.company,self.owner),as_dict = True)
 			if user_list:
 				credit_limit = frappe.db.get_value("Company",{"name":user_list[0].company},"credit_balance")
 				credit_limit -= self.amount
 				frappe.db.sql("""Update `tabCompany` set credit_balance = '{0}' where name = '{1}' """.format(credit_limit,user_list[0].company))
 
-		if "gta.lnder.in" in frappe.utils.get_url() and self.workflow_state == "Pending" and self.party_type == "Supplier":
+		if "gta.lnder.in" == site_name and self.workflow_state == "Pending" and self.party_type == "Supplier":
 			if frappe.db.get_value("Supplier",{"name":self.party},"whatsapp_no"):
 				self.mobile_no = "91"+frappe.db.get_value("Supplier",{"name":self.party},"whatsapp_no")
 
@@ -59,7 +63,7 @@ class OutwardBankPayment(Document):
 			if completed_doc_count>=1:
 				status = 'Partially Completed'
 			if completed_doc_count == total_payments:
-				status = 'Completed' 
+				status = 'Completed'
 			frappe.db.set_value('Bulk Outward Bank Payment', {'name': self.bobp}, 'workflow_state', status)
 			frappe.db.set_value('Outward Bank Payment Details',{'parent':self.bobp,
 							'party_type': self.party_type,
@@ -160,7 +164,7 @@ class OutwardBankPayment(Document):
 		payment_entry.submit()
 
 		frappe.db.set_value(self.doctype, self.name, "payment_entry", payment_entry.name)
-  
+
 	@frappe.whitelist()
 	def create_payment_order_detail_journal(self,references):
 		account_paid_from = frappe.db.get_value("Bank Account", self.company_bank_account, "account")
@@ -212,7 +216,7 @@ def make_bank_payment(source_name, target_doc=None):
 				"field_map": {
 					"supplier": "party",
 					#"name" : "remarks",
-					"outstanding_amount" : "amount" 
+					"outstanding_amount" : "amount"
 				}
 				}
 
@@ -236,7 +240,7 @@ def bank_payment_for_purchase_order(source_name, target_doc=None):
 				"total_amount": source_doc.rounded_total,
 				"allocated_amount":source_doc.rounded_total
 			})
-		
+
 		from frappe.model.mapper import get_mapped_doc
 		doclist = get_mapped_doc("Purchase Order", source_name,{
 			"Purchase Order": {
@@ -245,7 +249,7 @@ def bank_payment_for_purchase_order(source_name, target_doc=None):
 				"field_map": {
 					"supplier": "party",
 					"name" : "remarks",
-					"grand_total" : "amount" 
+					"grand_total" : "amount"
 				}
 				}
 

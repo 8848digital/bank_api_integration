@@ -13,11 +13,14 @@ from frappe.permissions import add_permission, update_permission_property
 from frappe.core.doctype.version.version import get_diff
 from frappe.utils import getdate, now_datetime, get_link_to_form, get_datetime
 from datetime import datetime
-
+from urllib.parse import urlparse
 class BankAPIIntegration(Document):
 	pass
 
 def initiate_transaction_with_otp(docname, otp):
+	parsed_url = urlparse(frappe.utils.get_url())
+	site_name = parsed_url.netloc
+
 	doc = frappe.get_doc('Outward Bank Payment', docname)
 	workflow_state = None
 
@@ -33,11 +36,11 @@ def initiate_transaction_with_otp(docname, otp):
 		"CURRENCY": currency,
 		"TXNTYPE": doc.transaction_type,
 		"PAYEENAME": doc.party,
-		"DEBITACC": frappe.db.get_value('Bank Account', 
+		"DEBITACC": frappe.db.get_value('Bank Account',
 					{
 					'name': doc.company_bank_account
 					},'bank_account_no'),
-		"CREDITACC": frappe.db.get_value('Bank Account', 
+		"CREDITACC": frappe.db.get_value('Bank Account',
 				{'party_type': doc.party_type,
 				'party': doc.party,
 				'is_default': 1
@@ -46,12 +49,15 @@ def initiate_transaction_with_otp(docname, otp):
 	#Settingup Default IFSC for ICICI
 	company_bank_account=frappe.db.get_value('Bank Account',{'name':doc.company_bank_account},'bank')
 	bank_acc_details=frappe.db.get_value('Bank Account',{'party_type': doc.party_type,'party': doc.party,'is_default': 1},['bank','ifsc_code'],as_dict=True)
+	if not bank_acc_details:
+		frappe.throw(_(f'Party {doc.party} Bank Account not found'))
 	if company_bank_account == 'ICICI' and bank_acc_details.get('bank') == 'ICICI':
 		filters['IFSC'] = "ICIC0000011"
 	else:
 		filters['IFSC'] = bank_acc_details.get('ifsc_code')
 	##
-	if 'desk.lnder.in' in frappe.utils.get_url() and doc.against_customer:
+
+	if 'desk.lnder.in' == site_name and doc.against_customer:
 		account=None
 		if doc.recharge_type == "IOCL Recharge":
 			account = frappe.db.sql("""select va.account_no,b.ifsc_code from `tabBank Account` as b join `tabVirtual Account Details` as va on va.parent=b.name where va.customer = '{0}' and va.type = '{1}' and b.party='{2}' and b.is_default=1 """.format(doc.against_customer,"IOCL Recharge","IOCL"),as_dict=True)
@@ -104,6 +110,8 @@ def initiate_transaction_with_otp(docname, otp):
 #			frappe.throw(_(f'An error occurred while making request. Kindly check request log for more info {get_link_to_form("Bank API Request Log", log_name)}'))
 
 def initiate_transaction_without_otp(docname):
+	parsed_url = urlparse(frappe.utils.get_url())
+	site_name = parsed_url.netloc
 	doc = frappe.get_doc('Outward Bank Payment', docname)
 	workflow_state = None
 
@@ -117,11 +125,11 @@ def initiate_transaction_without_otp(docname):
 		"CURRENCY": currency,
 		"TXNTYPE": doc.transaction_type,
 		"PAYEENAME": doc.party,
-		"DEBITACC": frappe.db.get_value('Bank Account', 
+		"DEBITACC": frappe.db.get_value('Bank Account',
 				{
 				'name': doc.company_bank_account
 				},'bank_account_no'),
-		"CREDITACC": frappe.db.get_value('Bank Account', 
+		"CREDITACC": frappe.db.get_value('Bank Account',
 				{'party_type': doc.party_type,
 				'party': doc.party,
 				'is_default': 1
@@ -135,7 +143,7 @@ def initiate_transaction_without_otp(docname):
 	else:
 		filters['IFSC'] = bank_acc_details.get('ifsc_code')
 	##
-	if frappe.utils.get_url() == "https://desk.lnder.in" and doc.against_customer:
+	if 'desk.lnder.in' == site_name and doc.against_customer:
 		if doc.recharge_type == "IOCL Recharge":
 			account = frappe.db.sql("""select va.account_no,b.ifsc_code from `tabBank Account` as b join `tabVirtual Account Details` as va on va.parent=b.name where va.customer = '{0}' and va.type = '{1}' and b.party='{2}' and b.is_default=1 """.format(doc.against_customer,"IOCL Recharge","IOCL"),as_dict=True)
 		if doc.recharge_type == "BPCL Recharge":
@@ -149,7 +157,7 @@ def initiate_transaction_without_otp(docname):
 				"CURRENCY": currency,
 				"TXNTYPE": doc.transaction_type,
 				"PAYEENAME": doc.party,
-				"DEBITACC": frappe.db.get_value('Bank Account', 
+				"DEBITACC": frappe.db.get_value('Bank Account',
 						{
 						'name': doc.company_bank_account
 						},'bank_account_no'),
@@ -292,20 +300,20 @@ def get_api_provider_class(company_bank_account):
 	proxies = None
 	if not frappe.db.get_value('Bank API Integration', {'bank_account': company_bank_account, 'enable':1}):
 		frappe.throw(_(f'Kindly create and enable bank api integration for this bank account {get_link_to_form("Bank Account", company_bank_account)}'))
-	integration_doc = frappe.get_doc('Bank API Integration', {'bank_account': company_bank_account, 'enable':1})	
+	integration_doc = frappe.get_doc('Bank API Integration', {'bank_account': company_bank_account, 'enable':1})
 	if 'bank_api_integration' in config:
 		proxies = config.bank_api_integration['proxies'] \
 			if 'proxies' in config.bank_api_integration else None
-	config = {"APIKEY": integration_doc.get_password(fieldname="api_key") if integration_doc.api_key else None, 
+	config = {"APIKEY": integration_doc.get_password(fieldname="api_key") if integration_doc.api_key else None,
 			"CORPID": integration_doc.corp_id,
 			"USERID": integration_doc.user_id,
 			"AGGRID":integration_doc.aggr_id,
 			"AGGRNAME":integration_doc.aggr_name,
 			"URN": integration_doc.urn}
-	
+
 	file_paths = {'private_key': integration_doc.get_password(fieldname="private_key_path") if integration_doc.private_key_path else None,
 		'public_key': frappe.local.site_path + integration_doc.icici_public_key if integration_doc.icici_public_key else None}
-	
+
 	prov = CommonProvider(integration_doc.bank_api_provider, config, integration_doc.use_sandbox, proxies, file_paths, frappe.local.site_path)
 	return prov, config
 
@@ -313,7 +321,7 @@ def new_bank_transaction(transaction_list, bank_account):
 	for transaction in transaction_list:
 		withdrawal_amt = abs(float(transaction['debit'].replace(',',''))) if transaction['debit'] else 0
 		deposit_amt = abs(float(transaction['credit'].replace(',',''))) if transaction['credit'] else 0
-		duplicate_record = frappe.db.sql("""select name from `tabBank Transaction` 
+		duplicate_record = frappe.db.sql("""select name from `tabBank Transaction`
 						where date='{0}' and withdrawal='{1}' and deposit='{2}' and description='{3}'
 					""".format(getdate(transaction['txn_date'].split(' ')[0]),withdrawal_amt,deposit_amt,transaction['remarks']),as_dict=True)
 		if not duplicate_record:
@@ -328,8 +336,11 @@ def new_bank_transaction(transaction_list, bank_account):
 			except:
 				pass
 			duplicate=None
+			trxn_batch_update=None
 			if withdrawal_amt and utr and utr not in ["BANK CHARGES",None,"18971ORY","TAX PAYMENT","73711SRY","23492HHR","RETURN","44621NCR"]:
 				duplicate=frappe.db.get_value("Bank Transaction",{'utr_no':utr,'date':transaction['txn_date'].split(' ')[0],'deposit':0},'name')
+				if not duplicate:
+					trxn_batch_update=frappe.db.get_value("Bank Transaction",{'utr_no':None,'transaction_id':transaction["txn_id"],'date':transaction['txn_date'].split(' ')[0],'deposit':0,'withdrawal':withdrawal_amt},'name')
 			elif deposit_amt and utr and utr not in ["BANK CHARGES",None,"18971ORY","TAX PAYMENT","73711SRY","23492HHR","RETURN","44621NCR"]:
 				duplicate=frappe.db.get_value("Bank Transaction",{'utr_no':utr,'date':transaction['txn_date'].split(' ')[0],'withdrawal':0},'name')
 			if duplicate:
@@ -343,6 +354,18 @@ def new_bank_transaction(transaction_list, bank_account):
 					if deposit_amt and existing_doc.deposit:
 						if deposit_amt<existing_doc.deposit or deposit_amt<existing_doc.unallocated_amount:
 							frappe.db.sql("Update `tabBank Transaction` set deposit='{0}',unallocated_amount='{0}' where name='{1}'".format(deposit_amt,existing_doc.name))
+			elif trxn_batch_update:
+				existing_doc_name=existing_doc_name
+				if existing_doc_name:
+					existing_doc=frappe.get_doc("Bank Transaction",existing_doc_name)
+					if withdrawal_amt and existing_doc.withdrawal:
+						if withdrawal_amt==existing_doc.withdrawal:
+							frappe.db.sql("""Update `tabBank Transaction`
+											set withdrawal='{0}',
+												unallocated_amount='{0}',
+												utr_no='{1}',
+												description='{2}'
+											where name='{4}'""".format(withdrawal_amt,utr,transaction['remarks'],existing_doc.name))
 			else:
 				new_transaction = frappe.get_doc({
 					'doctype': 'Bank Transaction',
@@ -362,7 +385,7 @@ def new_bank_transaction(transaction_list, bank_account):
 @frappe.whitelist()
 def fetch_balance(bank_account = None):
 	account_list = []
-	
+
 	if not bank_account:
 		for acc in frappe.db.get_list('Bank Account', {'is_company_account': 1}):
 			account_list.append(acc['name'])
@@ -384,7 +407,7 @@ def fetch_balance(bank_account = None):
 				frappe.msgprint(_("""Balance Updated"""))
 		except:
 			res = frappe.get_traceback()
-		
+
 		log_name = log_request(bank_account, 'Fetch Balance', filters, config, res)
 		if isinstance(res, dict):
 			if 'status' in res and res['status']== 'FAILURE' and bank_account:
@@ -424,7 +447,7 @@ def fetch_account_statement(bank_account = None):
 			if res['status'] == 'SUCCESS':
 				transaction_list = []
 				for transaction in res['record']:
-					credit = 0 
+					credit = 0
 					debit = 0
 					if transaction['TYPE'] == 'DR':
 						debit = transaction['AMOUNT']
@@ -579,7 +602,7 @@ def create_workflow(document_name):
 							'allow_self_approval': 0,
 							'next_state': state[1],
 							'allowed': 'Bank Checker'}
-			workflow_doc.append('transitions',transitions)	
+			workflow_doc.append('transitions',transitions)
 		if document_name == 'Outward Bank Payment':
 			optional_states = ['Verified','Verification Failed','Initiated',
 					'Initiation Error', 'Initiation Failed', 'Transaction Failed', 'Initiation Pending',
@@ -626,8 +649,8 @@ def get_company_bank_account(doctype, txt, searchfield, start, page_len, filters
 	bank_accounts = []
 	for acc in frappe.get_list("Bank Account", filters= filters,fields=["name"]):
 		if not acc['name'] in bank_accounts:
-			is_enabled = frappe.get_value('Bank API Integration', 
-				{'bank_account': acc['name']}, 
+			is_enabled = frappe.get_value('Bank API Integration',
+				{'bank_account': acc['name']},
 				'enable_transaction')
 			if is_enabled:
 				bank_accounts.append([acc['name']])
