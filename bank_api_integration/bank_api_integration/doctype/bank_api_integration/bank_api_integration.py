@@ -51,6 +51,8 @@ def initiate_transaction_with_otp(docname, otp):
 	bank_acc_details=frappe.db.get_value('Bank Account',{'party_type': doc.party_type,'party': doc.party,'is_default': 1},['bank','ifsc_code'],as_dict=True)
 	if not bank_acc_details:
 		frappe.throw(_(f'Party {doc.party} Bank Account not found'))
+	if not bank_acc_details:
+		frappe.throw(_(f'Party {doc.party} Bank Account not found'))
 	if company_bank_account == 'ICICI' and bank_acc_details.get('bank') == 'ICICI':
 		filters['IFSC'] = "ICIC0000011"
 	else:
@@ -138,6 +140,8 @@ def initiate_transaction_without_otp(docname):
 	#Settingup Default IFSC for ICICI
 	company_bank_account=frappe.db.get_value('Bank Account',{'name':doc.company_bank_account},'bank')
 	bank_acc_details=frappe.db.get_value('Bank Account',{'party_type': doc.party_type,'party': doc.party,'is_default': 1},['bank','ifsc_code'],as_dict=True)
+	if not bank_acc_details:
+		frappe.throw(_(f'Party {doc.party} Bank Account not found'))
 	if company_bank_account == 'ICICI' and bank_acc_details.get('bank') == 'ICICI':
 		filters['IFSC'] = "ICIC0000011"
 	else:
@@ -337,8 +341,11 @@ def new_bank_transaction(transaction_list, bank_account):
 				pass
 			duplicate=None
 			trxn_batch_update=None
+			trxn_batch_update=None
 			if withdrawal_amt and utr and utr not in ["BANK CHARGES",None,"18971ORY","TAX PAYMENT","73711SRY","23492HHR","RETURN","44621NCR"]:
 				duplicate=frappe.db.get_value("Bank Transaction",{'utr_no':utr,'date':transaction['txn_date'].split(' ')[0],'deposit':0},'name')
+				if not duplicate:
+					trxn_batch_update=frappe.db.get_value("Bank Transaction",{'utr_no':None,'transaction_id':transaction["txn_id"],'date':transaction['txn_date'].split(' ')[0],'deposit':0,'withdrawal':withdrawal_amt},'name')
 				if not duplicate:
 					trxn_batch_update=frappe.db.get_value("Bank Transaction",{'utr_no':None,'transaction_id':transaction["txn_id"],'date':transaction['txn_date'].split(' ')[0],'deposit':0,'withdrawal':withdrawal_amt},'name')
 			elif deposit_amt and utr and utr not in ["BANK CHARGES",None,"18971ORY","TAX PAYMENT","73711SRY","23492HHR","RETURN","44621NCR"]:
@@ -364,8 +371,9 @@ def new_bank_transaction(transaction_list, bank_account):
 											set withdrawal='{0}',
 												unallocated_amount='{0}',
 												utr_no='{1}',
-												description='{2}'
-											where name='{4}'""".format(withdrawal_amt,utr,transaction['remarks'],existing_doc.name))
+												description='{2}',
+												status= 'Unreconciled'
+											where name='{3}'""".format(withdrawal_amt,utr,transaction['remarks'],existing_doc.name))
 			else:
 				new_transaction = frappe.get_doc({
 					'doctype': 'Bank Transaction',
