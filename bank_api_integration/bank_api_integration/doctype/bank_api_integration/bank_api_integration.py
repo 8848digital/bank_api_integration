@@ -12,7 +12,7 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.permissions import add_permission, update_permission_property
 from frappe.core.doctype.version.version import get_diff
 from frappe.utils import getdate, now_datetime, get_link_to_form, get_datetime
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 class BankAPIIntegration(Document):
 	pass
@@ -251,7 +251,9 @@ def update_transaction_status(obp_name=None,bobp_name=None):
 	if bobp_name:
 		obp_list = frappe.db.get_all('Outward Bank Payment', {'workflow_state': ['in', ['Initiated','Initiation Pending','Transaction Pending']], 'bobp': ['=', bobp_name],'is_bulk_payout_api':0})
 	if bulk_update:
-		obp_list = frappe.db.get_all('Outward Bank Payment', {'workflow_state': ['in', ['Initiated','Initiation Pending','Transaction Pending','Initiation Error','Transaction Failed','Transaction Error']],'docstatus' : ['in',['0' , '1']],'is_bulk_payout_api':0})
+		time_change=timedelta(days=7)
+		start_datetime=(datetime.now()-time_change)
+		obp_list = frappe.db.get_all('Outward Bank Payment', {'workflow_state': ['in', ['Initiated','Initiation Pending','Transaction Pending','Initiation Error','Transaction Failed','Transaction Error']],'docstatus' : ['in',['0' , '1']],'is_bulk_payout_api':0,"creation":[">=",start_datetime]})
 
 	failed_obp_list = []
 	if not obp_list:
