@@ -380,6 +380,7 @@ def new_bank_transaction(transaction_list, bank_account):
 				new_transaction = frappe.get_doc({
 					'doctype': 'Bank Transaction',
 					'date': getdate(transaction['txn_date'].split(' ')[0]),
+					'transaction_datetime' : get_datetime(transaction['transaction_datetime']), 
 					'status': "Unreconciled",
 					"transaction_id": transaction["txn_id"],
 					'withdrawal': abs(float(transaction['debit'].replace(',',''))) if transaction['debit'] else 0,
@@ -469,6 +470,7 @@ def fetch_account_statement(bank_account = None):
 					transaction_list.append({
 						'txn_id': transaction['TRANSACTIONID'],
 						'txn_date':t_date.strftime('%Y-%m-%d'),
+						'transaction_datetime': t_date.strftime('%Y-%m-%d %H:%M:%S'),
 						'debit': debit,
 						'credit': credit,
 						'remarks':transaction['REMARKS']
