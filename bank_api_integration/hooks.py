@@ -107,7 +107,10 @@ scheduler_events = {
 		"bank_api_integration.bank_api_integration.doctype.bank_api_integration.bank_api_integration.fetch_balance",
 		"bank_api_integration.bank_api_integration.doctype.bank_api_integration.bank_api_integration.fetch_account_statement"
 		]
-	}
+	},
+	"daily" : [
+		"bank_api_integration.bank_api_integration.doctype.bank_api_request_log.bank_api_request_log.delete_older_logs"
+	]
 }
 # 	"all": [
 # 		"bank_api_integration.tasks.all"
